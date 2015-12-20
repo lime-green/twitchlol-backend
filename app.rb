@@ -20,21 +20,25 @@ module Twitch
 end
 
 module League
-    def self.get_name(cookies)
+    def self.get_name(region, cookies)
         response = RestClient.get(
-            'http://boards.na.leagueoflegends.com/en/c/bug-report/irZuU2Kz-crashes-affecting-mac-users-in-514',
+            "http://boards.#{region.downcase}.leagueoflegends.com/en/submit",
             :cookies => cookies
         )
 
         html = Nokogiri::HTML(response.body)
-        data = html.css('script').map(&:content).grep(/DiscussionShowPage/)
+        data = html.css('script').map(&:content).grep(/apolloPageBootstrap/)
 
         if data.length == 1
-            match = data[0].match(/document\.apolloPageBootstrap\.push\({.*?data:(.*)}.*\)/m)
-            if match
-                JSON.parse(match[1])["user"]["name"]
-            end
+            match = data[0].match(/document\.apolloPageBootstrap\.push\({.*?data:.*?user.*?name.*?:"(.*?)"/m)
+            match[1]
         end
+    end
+end
+
+module Linker
+    def self.create(twitch_name, league_name)
+        'http://someotherlink.com/abcd'
     end
 end
 
@@ -45,17 +49,27 @@ class TwitchLol < Sinatra::Base
 
     post '/link' do
         headers 'Access-Control-Allow-Origin' => '*'
+        content_type :json
+
         twitch_cookie = params[:twitch]
-        league_cookie = params[:league]
+        league_token = params[:league][:token]
+        league_region = params[:league][:region]
 
         twitch_name = Twitch.get_name(
             twitch_cookie[:name] => twitch_cookie[:value]
         )
 
         league_name = League.get_name(
-            league_cookie[:name] => league_cookie[:value]
+            league_region[:value],
+            league_token[:name] => league_token[:value]
         )
 
-        puts "TWITCH: #{twitch_name}\nLEAGUE: #{league_name}"
+        link = Linker.create(twitch_name, league_name)
+
+        {
+            twitch_name: twitch_name,
+            league_name: league_name,
+            link: link
+        }.to_json
     end
 end
