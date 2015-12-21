@@ -2,6 +2,11 @@ require 'sinatra/base'
 require 'rest-client'
 require 'nokogiri'
 require 'json'
+require 'sinatra/activerecord'
+
+require_relative 'models/summoner'
+require_relative 'models/twitch_summoner'
+require_relative 'models/twitch_user'
 
 module Twitch
     def self.get_name(cookies)
@@ -37,12 +42,25 @@ module League
 end
 
 module Linker
-    def self.create(twitch_name, league_name)
-        'http://someotherlink.com/abcd'
+    def self.create(twitch_name, league_name, league_region)
+        twitch_user = TwitchUser.find_or_create_by(name: twitch_name)
+        summoner = Summoner.find_or_create_by(name: league_name, region: league_region)
+        twitch_user.summoners << summoner
+
+        "http://mydomain.com/#{twitch_user.sha}"
     end
+
+  def self.destroy(twitch_name, league_name, league_region)
+      twitch_id = TwitchUser.find_by(name: twitch_name)
+      summoner_id = Summoner.find_by(name: league_name, region: league_region.upcase)
+
+      TwitchSummoner.find_by(twitch_user_id: twitch_id, summoner_id: summoner_id).destroy
+  end
 end
 
 class TwitchLol < Sinatra::Base
+    register Sinatra::ActiveRecordExtension
+
     get '/ping' do
         'pong'
     end
@@ -64,7 +82,7 @@ class TwitchLol < Sinatra::Base
             league_token[:name] => league_token[:value]
         )
 
-        link = Linker.create(twitch_name, league_name)
+        link = Linker.create(twitch_name, league_name, league_region[:value])
 
         {
             twitch_name: twitch_name,
