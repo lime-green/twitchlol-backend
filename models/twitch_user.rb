@@ -10,4 +10,8 @@ class TwitchUser < ActiveRecord::Base
   def create_hash
     self.sha = Digest::SHA1.hexdigest self.name
   end
+
+  def to_url
+    "http://127.0.0.1:8080/app/#/#{self.sha}"
+  end
 end
