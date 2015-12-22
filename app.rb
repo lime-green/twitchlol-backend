@@ -105,8 +105,6 @@ class TwitchLol < Sinatra::Base
 
     post '/unlink' do
         headers 'Access-Control-Allow-Origin' => '*'
-        puts "PARAMS:"
-        puts params
 
         Linker.destroy(params[:sha], params[:summoner_id])
     end
