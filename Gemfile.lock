@@ -33,6 +33,7 @@ GEM
     rack-protection (1.5.3)
       rack
     rake (10.4.2)
+    redis (3.2.2)
     rest-client (1.8.0)
       http-cookie (>= 1.0.2, < 2.0)
       mime-types (>= 1.16, < 3.0)
@@ -60,6 +61,7 @@ DEPENDENCIES
   mysql2
   nokogiri
   rake
+  redis
   rest-client
   sinatra
   sinatra-activerecord

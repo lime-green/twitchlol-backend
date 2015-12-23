@@ -16,4 +16,16 @@ class TwitchSummoner < ActiveRecord::Base
 
     twitch_user.twitch_summoners.find_by(summoner: summoner)
   end
+
+  def to_code
+    sha = self.twitch_user.sha
+    id = self.summoner.id
+    "#{sha}-#{id}"
+  end
+
+  def to_url
+    sha = self.twitch_user.sha
+    id = self.summoner.id
+    "http://127.0.0.1:8080/app/#/#{sha}/#{id}"
+  end
 end

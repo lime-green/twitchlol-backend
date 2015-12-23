@@ -3,6 +3,8 @@ require 'rest-client'
 require 'nokogiri'
 require 'json'
 require 'sinatra/activerecord'
+require 'uri'
+require 'redis'
 
 require_relative 'models/summoner'
 require_relative 'models/twitch_summoner'
@@ -51,7 +53,77 @@ module Linker
   end
 end
 
+module LeagueApi
+  class RateLimitReached < StandardError; end
+
+  def self.summoner_id(region, name)
+    url = "https://na.api.pvp.net/api/lol/#{region}/v1.4/summoner/by-name/#{URI.escape name}"
+    response = request(url)
+
+    JSON.parse(response.body).first[1]['id']
+  end
+
+  def self.summoner_division(region, id)
+    url = "https://na.api.pvp.net/api/lol/#{region}/v2.5/league/by-summoner/#{id}"
+    response = request(url)
+
+    if response.code == 404
+      {league: 'UNKRANKED'}
+    else
+      hash = JSON.parse(response.body).first[1]
+      ranked_solo = hash.find {|data| data['queue'] == "RANKED_SOLO_5x5"}
+      entry = ranked_solo['entries'].find {|data| data['playerOrTeamId'] == id.to_s}
+
+      if ranked_solo
+        {
+            league: ranked_solo['tier'],
+            division: entry['division'],
+            points: entry['leaguePoints']
+        }
+      else
+        {league: 'UNRANKED'}
+      end
+    end
+  end
+
+  private
+
+  def self.request(url)
+    api_key = ENV['LEAGUE_API_KEY']
+    response = RestClient.get("#{url}?api_key=#{api_key}")
+
+    raise RateLimitReached if response.code == 429
+    response
+  end
+end
+
 class TwitchLol < Sinatra::Base
+    def initialize
+      super
+      @redis = Redis.new
+    end
+
+    get '/summoner_division/:summoner_name' do
+      headers 'Access-Control-Allow-Origin' => '*'
+      content_type :json
+
+      region = (params[:region] || 'na').downcase
+      cache_key = 'summoner_division' + params[:summoner_name] + region
+      cached = @redis.get(cache_key)
+
+      if cached
+        halt 200, cached
+      end
+
+      summoner_id = LeagueApi.summoner_id(region, params[:summoner_name])
+      division = LeagueApi.summoner_division(region, summoner_id)
+      output = division.to_json
+
+      @redis.set(cache_key, output)
+      @redis.expire(cache_key, 3600)
+      output
+    end
+
     get '/user/:sha' do
         headers 'Access-Control-Allow-Origin' => '*'
         content_type :json
@@ -99,7 +171,8 @@ class TwitchLol < Sinatra::Base
         {
             twitch_name: twitch_name,
             league_name: league_name,
-            link: twitch_summoner.twitch_user.to_url
+            link: twitch_summoner.to_url,
+            code: twitch_summoner.to_code
         }.to_json
     end
 
